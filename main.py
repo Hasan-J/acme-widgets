@@ -1,6 +1,7 @@
 import re
 from typing import Callable, DefaultDict, Dict, Iterable
 from collections import defaultdict
+from abc import ABC, abstractmethod
 
 ##############
 # Widget Class
@@ -84,64 +85,57 @@ def delivery_charge(total: float) -> float | int:
 ################
 
 
-class SpecialOffer:
-    """Class used to define how to calculate discount logic, given a specific
-    Basket and WidgetCatalog.
-
-    Example:
-
-        # Offer that applies a 50% discount on everything.
-        def my_special_offer_func(items_ordered: DefaultDict[str, int], catalog: WidgetCatalog):
-            total_price = 0
-            for wiget_code, wiget_count in items_ordered.items():
-                total_price += catalog.get(wiget_code).price * wiget_count
-            return total_price / 2
-
-        my_special_offer = SpecialOffer(
-            description="Get 50% discount on everything, you rock!",
-            apply_func=my_special_offer_func
-        )
-
-    Args:
-        description (str): Brief description of how the offer works.
-        apply_func (Callable[[DefaultDict[str, int], WidgetCatalog], float]): A function
-            that caculates & returns the discount amount, it should accept 2 arguments.
-            First is a dict of unique widget codes mapped to an int that represents ordered count.
-            Second is a WidgetCatalog.
+class ISpecialOffer(ABC):
+    """An interface for special offers. Implement this class to define
+    discount logic, given a specific Basket instance.
     """
 
-    def __init__(
-        self,
-        description: str,
-        apply_func: Callable[[DefaultDict[str, int], WidgetCatalog], float],
-    ):
-        self.description = description
-        self.apply_func = apply_func
+    # Brief description of how the offer works.
+    # Define this value in implementations.
+    description = None
 
-    def apply(
-        self, items_ordered: DefaultDict[str, int], catalog: WidgetCatalog
-    ) -> float:
-        return self.apply_func(items_ordered, catalog)
+    def __init__(self):
+        if self.description is None:
+            raise AttributeError("Class attribute 'description' cannot be None.")
+
+    @abstractmethod
+    def apply(self, basket: "Basket") -> float:
+        """Imlpement offer logic, return total discount based on basket items & catalog."""
+        ...
+
+
+class RedWidgetCoolSpecialOffer(ISpecialOffer):
+    """Special offer that provides discounts on red widgets.
+    Whenever you buy one red widget you get the second for hald the price.
+    """
+
+    description = "Buy one red widget, get the second half price"
+
+    def apply(self, basket: "Basket") -> float:
+        red_widget_code = "R01"
+        discount_on_red_widgets = (basket.items_ordered[red_widget_code] // 2) * (
+            basket.catalog.get(red_widget_code).price / 2
+        )
+
+        return discount_on_red_widgets
 
 
 class SpecialOfferHandler:
-    def __init__(self, offers: Iterable[SpecialOffer]):
-        """Manages a collection of SpecialOffer and applies them on the current ordered items
-        of a Basket in order to calculate the total discount amount.
+    def __init__(self, offers: Iterable[ISpecialOffer]):
+        """Manages a collection of ISpecialOffer implementations and applies them on the
+        current ordered items of a Basket in order to calculate the total discount amount.
 
         Args:
-            offers (Iterable[SpecialOffer]): Collection of special offers.
+            offers (Iterable[ISpecialOffer]): Collection of special offers.
         """
 
         self.offers = offers
 
-    def get_discount(
-        self, items_ordered: DefaultDict[str, int], catalog: WidgetCatalog
-    ) -> float | int:
+    def get_discount(self, basket: "Basket") -> float | int:
         total_discount = 0
-        if len(items_ordered):
+        if len(basket.items_ordered):
             for offer in self.offers:
-                total_discount += offer.apply(items_ordered, catalog)
+                total_discount += offer.apply(basket)
         return total_discount
 
     @property
@@ -193,9 +187,7 @@ class Basket:
         for widget_code, widget_count in self.items_ordered.items():
             total += self.catalog.get(widget_code).price * widget_count
         if self.special_offers_handler:
-            total -= self.special_offers_handler.get_discount(
-                self.items_ordered, self.catalog
-            )
+            total -= self.special_offers_handler.get_discount(self)
         total += self.calculate_delivery_charge(total)
         return total
 
@@ -243,24 +235,12 @@ def get_basket():
         ]
     )
 
-    # Define an apply_func for SpecialOffer
-    def red_widget_offer_apply_func(items_ordered, catalog):
-        red_widget_code = "R01"
-        discount_on_red_widgets = (items_ordered[red_widget_code] // 2) * (
-            catalog.get(red_widget_code).price / 2
-        )
-
-        return discount_on_red_widgets
-
-    red_widget_is_cool_offer = SpecialOffer(
-        description="Buy one red widget, get the second half price",
-        apply_func=red_widget_offer_apply_func,
-    )
-
     basket = Basket(
         catalog=widget_catalog,
         calculate_delivery_charge=delivery_charge,
-        special_offers_handler=SpecialOfferHandler(offers=[red_widget_is_cool_offer]),
+        special_offers_handler=SpecialOfferHandler(
+            offers=[RedWidgetCoolSpecialOffer()]
+        ),
     )
 
     return basket
