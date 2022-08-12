@@ -91,11 +91,16 @@ class SpecialOffer:
     Example:
 
         # Offer that applies a 50% discount on everything.
-        def my_special_offer(items_ordered: DefaultDict[str, int], catalog: WidgetCatalog):
+        def my_special_offer_func(items_ordered: DefaultDict[str, int], catalog: WidgetCatalog):
             total_price = 0
             for wiget_code, wiget_count in items_ordered.items():
                 total_price += catalog.get(wiget_code).price * wiget_count
             return total_price / 2
+
+        my_special_offer = SpecialOffer(
+            description="Get 50% discount on everything, you rock!",
+            apply_func=my_special_offer_func
+        )
 
     Args:
         description (str): Brief description of how the offer works.
